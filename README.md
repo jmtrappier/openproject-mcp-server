@@ -179,7 +179,7 @@ For advanced users who want full control:
    docker run -d \
      --name openproject-mcp-server \
      --env-file .env \
-     -p 8080:8080 \
+     -p 39127:8080 \
      -v ./logs:/app/logs \
      -v ./data:/app/data \
      --restart unless-stopped \
@@ -194,8 +194,8 @@ For advanced users who want full control:
    # View container logs
    docker logs openproject-mcp-server
    
-   # Test API endpoint
-   curl http://localhost:8080/health
+   # Test API endpoint (Note: No health endpoint in MCP server)
+   curl http://localhost:39127/sse
    ```
 
 ### Deployment Script Commands
@@ -203,14 +203,14 @@ For advanced users who want full control:
 The `scripts/deploy.sh` script provides comprehensive deployment management:
 
 ```bash
-# Deploy on default port 8080
+# Deploy on standard MCP port (recommended)
+./scripts/deploy.sh deploy 39127
+
+# Deploy on default port 8080 (may conflict with OpenProject)
 ./scripts/deploy.sh deploy
 
-# Deploy on custom port (avoid conflicts)
+# Deploy on alternative ports if needed
 ./scripts/deploy.sh deploy 9876
-
-# Deploy on development port
-./scripts/deploy.sh deploy 8090
 
 # View container logs
 ./scripts/deploy.sh logs
@@ -229,23 +229,23 @@ The `scripts/deploy.sh` script provides comprehensive deployment management:
 ```
 
 **💡 Port Selection Tips:**
-- **Port 8080**: Default, but often used by OpenProject itself
+- **Port 39127**: Recommended MCP standard port, matches default config
+- **Port 8080**: Default HTTP port, but often conflicts with OpenProject
 - **Port 9876**: Good alternative, rarely conflicts
 - **Port 8090**: Common development port
-- **Port 3001**: Alternative if running multiple Node.js apps
 
 ### Environment Variables for Docker
 
 When using Docker, configure these environment variables in your `.env` file:
 
 ```env
-# OpenProject Instance URL (include protocol)
-OPENPROJECT_URL=http://localhost:3000
+# OpenProject Instance URL (where your OpenProject runs, typically port 8080)
+OPENPROJECT_URL=http://localhost:8080
 
 # OpenProject API Key (from your user profile)
 OPENPROJECT_API_KEY=your_40_character_api_key_here
 
-# MCP Server Configuration
+# MCP Server Configuration (internal container port, mapped to 39127)
 MCP_HOST=0.0.0.0
 MCP_PORT=8080
 MCP_LOG_LEVEL=INFO
@@ -303,7 +303,8 @@ Add to your `claude_desktop_config.json`:
 **Important Notes**: 
 - Use the full absolute path to the `run_server.py` script for Option 1
 - Ensure the Docker container is running before using Option 2
-- Update the OPENPROJECT_URL to match your OpenProject instance port
+- OPENPROJECT_URL should point to your OpenProject instance (typically port 8080)
+- MCP server URL (port 39127) is configured separately in the transport URL
 
 ### Usage Examples
 
