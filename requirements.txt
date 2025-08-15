@@ -1,0 +1,7 @@
+# Core dependencies for OpenProject MCP Server MVP
+fastmcp>=0.9.0        # FastMCP framework for simplified MCP implementation
+httpx>=0.25.0         # Async HTTP client
+pydantic>=2.0.0       # Data validation and serialization
+python-dotenv>=1.0.0  # Environment configuration management
+structlog>=23.0.0     # Structured logging
+rich>=13.0.0          # Rich terminal output
