@@ -119,15 +119,17 @@ Docker deployment is the **recommended production method** for the OpenProject M
 cp env.example .env
 # Edit .env with your OpenProject URL and API key
 
-# Deploy on default port 8080
+# Deploy on specific port (IMPORTANT: Must match Claude Desktop config)
+./scripts/deploy.sh deploy 39127
+
+# Alternative: Deploy on default port 8080
 ./scripts/deploy.sh deploy
 
-# Deploy on custom port (if 8080 is occupied)
+# For development with different ports
 ./scripts/deploy.sh deploy 9876
-
-# Deploy on random available port (recommended for development)
-./scripts/deploy.sh deploy 8090
 ```
+
+**🔑 Important**: The port MUST match your Claude Desktop MCP configuration in `~/.cursor/mcp.json` or `claude_desktop_config.json`!
 
 **Option 2: Docker Compose (Alternative)**
 ```bash
@@ -141,11 +143,27 @@ docker-compose logs -f
 docker-compose down
 ```
 
-**🔧 Port Conflict Resolution:**
-If you get a "port already allocated" error:
-- Check what's using the port: `docker ps | grep 8080`
-- Deploy on a different port: `./scripts/deploy.sh deploy 9876`
-- Common alternative ports: 8081, 8090, 9876, 3001
+**🔧 Port Configuration & Conflicts:**
+
+**Step 1: Choose your port (must be consistent)**
+```bash
+# Check your current MCP configuration
+cat ~/.cursor/mcp.json | grep openproject -A 5
+
+# Or check Claude Desktop config
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
+```
+
+**Step 2: Deploy on the SAME port as your MCP config**
+```bash
+# Deploy on the port specified in your MCP config
+./scripts/deploy.sh deploy 39127
+```
+
+**Step 3: If port conflicts occur:**
+- Stop conflicting services: `docker stop container_using_port`
+- Or update BOTH MCP config AND deployment port consistently
+- Check what's using port: `docker ps | grep 39127`
 
 ### Manual Docker Commands
 
@@ -273,16 +291,14 @@ Add to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "openproject": {
-      "command": "docker",
-      "args": ["exec", "-i", "openproject-mcp-server", "python3", "scripts/run_server.py"],
-      "env": {
-        "OPENPROJECT_URL": "http://localhost:8080",
-        "OPENPROJECT_API_KEY": "your_api_key_here"
-      }
+      "transport": "sse",
+      "url": "http://localhost:39127/sse"
     }
   }
 }
 ```
+
+**Environment Setup:** Configure OpenProject credentials in Docker deployment `.env` file instead of MCP config.
 
 **Important Notes**: 
 - Use the full absolute path to the `run_server.py` script for Option 1
