@@ -119,8 +119,14 @@ Docker deployment is the **recommended production method** for the OpenProject M
 cp env.example .env
 # Edit .env with your OpenProject URL and API key
 
-# Deploy with automated script
+# Deploy on default port 8080
 ./scripts/deploy.sh deploy
+
+# Deploy on custom port (if 8080 is occupied)
+./scripts/deploy.sh deploy 9876
+
+# Deploy on random available port (recommended for development)
+./scripts/deploy.sh deploy 8090
 ```
 
 **Option 2: Docker Compose (Alternative)**
@@ -134,6 +140,12 @@ docker-compose logs -f
 # Stop the container
 docker-compose down
 ```
+
+**🔧 Port Conflict Resolution:**
+If you get a "port already allocated" error:
+- Check what's using the port: `docker ps | grep 8080`
+- Deploy on a different port: `./scripts/deploy.sh deploy 9876`
+- Common alternative ports: 8081, 8090, 9876, 3001
 
 ### Manual Docker Commands
 
@@ -176,24 +188,33 @@ The `scripts/deploy.sh` script provides comprehensive deployment management:
 # Deploy on default port 8080
 ./scripts/deploy.sh deploy
 
-# Deploy on custom port
-./scripts/deploy.sh deploy 9000
+# Deploy on custom port (avoid conflicts)
+./scripts/deploy.sh deploy 9876
+
+# Deploy on development port
+./scripts/deploy.sh deploy 8090
 
 # View container logs
 ./scripts/deploy.sh logs
 
-# Check status
+# Check status and port information
 ./scripts/deploy.sh status
 
 # Stop the server
 ./scripts/deploy.sh stop
 
-# Restart the server
+# Restart the server (keeps same port)
 ./scripts/deploy.sh restart
 
-# Clean up (stop and remove)
+# Clean up (stop and remove container/image)
 ./scripts/deploy.sh clean
 ```
+
+**💡 Port Selection Tips:**
+- **Port 8080**: Default, but often used by OpenProject itself
+- **Port 9876**: Good alternative, rarely conflicts
+- **Port 8090**: Common development port
+- **Port 3001**: Alternative if running multiple Node.js apps
 
 ### Environment Variables for Docker
 
@@ -231,6 +252,7 @@ OPENPROJECT_MAX_RETRIES=3
 
 Add to your `claude_desktop_config.json`:
 
+**Option 1: Local Python execution**
 ```json
 {
   "mcpServers": {
@@ -238,7 +260,7 @@ Add to your `claude_desktop_config.json`:
       "command": "python3",
       "args": ["/full/path/to/openproject-mcp-server/scripts/run_server.py"],
       "env": {
-        "OPENPROJECT_URL": "http://localhost:3000",
+        "OPENPROJECT_URL": "http://localhost:8080",
         "OPENPROJECT_API_KEY": "your_api_key_here"
       }
     }
@@ -246,7 +268,26 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-**Important**: Use the full absolute path to the `run_server.py` script.
+**Option 2: Docker deployment (recommended)**
+```json
+{
+  "mcpServers": {
+    "openproject": {
+      "command": "docker",
+      "args": ["exec", "-i", "openproject-mcp-server", "python3", "scripts/run_server.py"],
+      "env": {
+        "OPENPROJECT_URL": "http://localhost:8080",
+        "OPENPROJECT_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+**Important Notes**: 
+- Use the full absolute path to the `run_server.py` script for Option 1
+- Ensure the Docker container is running before using Option 2
+- Update the OPENPROJECT_URL to match your OpenProject instance port
 
 ### Usage Examples
 
