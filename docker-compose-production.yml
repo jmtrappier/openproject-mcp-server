@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  openproject-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openproject-mcp-server
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      # Utiliser le nom du service OpenProject dans le réseau Docker
+      - OPENPROJECT_URL=http://openproject:8080
+      - OPENPROJECT_API_KEY=${OPENPROJECT_API_KEY}
+      - MCP_HOST=${MCP_HOST}
+      - MCP_PORT=${MCP_PORT}
+      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
+    
+    # Port mapping pour accès externe
+    ports:
+      - "${MCP_EXTERNAL_PORT:-39127}:8080"  # Port MCP principal
+      - "${MCP_STATUS_PORT:-39128}:8081"    # Port de statut
+    
+    # Volume mounts pour persistance
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import asyncio; import sys; sys.path.insert(0, '/app/src'); from openproject_client import OpenProjectClient; async def check(): client = OpenProjectClient(); result = await client.test_connection(); await client.close(); exit(0 if result['success'] else 1); asyncio.run(check())"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Réseau partagé avec OpenProject
+    networks:
+      - openproject-network
+    
+    # Pas besoin d'extra_hosts car on utilise le réseau Docker
+
+  # Service OpenProject (optionnel - si vous voulez tout dans la même stack)
+  # openproject:
+  #   image: openproject/community:13
+  #   container_name: openproject
+  #   environment:
+  #     - OPENPROJECT_SECRET_KEY_BASE=${OPENPROJECT_SECRET_KEY_BASE}
+  #     - OPENPROJECT_HOST__NAME=${OPENPROJECT_HOST_NAME:-localhost}
+  #     - OPENPROJECT_HTTPS=false
+  #   ports:
+  #     - "${OPENPROJECT_PORT:-8080}:80"
+  #   volumes:
+  #     - openproject_data:/var/openproject/assets
+  #   networks:
+  #     - openproject-network
+  #   restart: unless-stopped
+
+networks:
+  openproject-network:
+    driver: bridge
+    # Si OpenProject est dans un autre docker-compose, utilisez external:
+    # external: true
+    # name: openproject_default
+
+volumes:
+  openproject_data:

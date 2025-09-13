@@ -1,0 +1,169 @@
+networks:
+  frontend:
+  backend:
+  traefik_network:
+    external: true
+
+volumes:
+  pgdata:
+  opdata:
+  mcp_logs:
+  mcp_data:
+
+x-op-restart-policy: &restart_policy
+  restart: unless-stopped
+x-op-image: &image
+  image: openproject/openproject:${TAG:-16-slim}
+x-op-app: &app
+  <<: [*image, *restart_policy]
+  environment:
+    OPENPROJECT_HTTPS: "${OPENPROJECT_HTTPS:-true}"
+    OPENPROJECT_HOST__NAME: "${OPENPROJECT_HOST__NAME:-localhost:8080}"
+    OPENPROJECT_HSTS: "${OPENPROJECT_HSTS:-true}"
+    RAILS_CACHE_STORE: "memcache"
+    OPENPROJECT_CACHE__MEMCACHE__SERVER: "cache:11211"
+    OPENPROJECT_RAILS__RELATIVE__URL__ROOT: "${OPENPROJECT_RAILS__RELATIVE__URL__ROOT:-}"
+    DATABASE_URL: "${DATABASE_URL:-postgres://postgres:p4ssw0rd@db/openproject?pool=20&encoding=unicode&reconnect=true}"
+    RAILS_MIN_THREADS: ${RAILS_MIN_THREADS:-4}
+    RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-16}
+    # set to true to enable the email receiving feature. See ./docker/cron for more options
+    IMAP_ENABLED: "${IMAP_ENABLED:-false}"
+  volumes:
+    - "${OPDATA:-opdata}:/var/openproject/assets"
+
+services:
+  db:
+    image: postgres:latest
+    <<: *restart_policy
+    stop_grace_period: "3s"
+    volumes:
+      - "${PGDATA:-pgdata}:/var/lib/postgresql/data"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-p4ssw0rd}
+      POSTGRES_DB: openproject
+    networks:
+      - backend
+
+  cache:
+    image: memcached
+    <<: *restart_policy
+    networks:
+      - backend
+
+  web:
+    <<: *app
+    command: "./docker/prod/web"
+    networks:
+      - frontend
+      - backend
+      - traefik_network      
+    depends_on:
+      - db
+      - cache
+      - seeder
+    labels:
+      - autoheal=true
+      - "traefik.enable=true"
+      - "traefik.http.routers.openproject.rule=Host(`${OPENPROJECT_HOST__NAME}`)"
+      - "traefik.http.routers.openproject.entrypoints=websecure"
+      - "traefik.http.routers.openproject.tls=true"
+      - "traefik.http.services.openproject.loadbalancer.server.port=8080"      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080${OPENPROJECT_RAILS__RELATIVE__URL__ROOT:-}/health_checks/default"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_START_PERIOD: 600
+      AUTOHEAL_INTERVAL: 30
+
+  worker:
+    <<: *app
+    command: "./docker/prod/worker"
+    networks:
+      - backend
+    depends_on:
+      - db
+      - cache
+      - seeder
+
+  cron:
+    <<: *app
+    command: "./docker/prod/cron"
+    networks:
+      - backend
+    depends_on:
+      - db
+      - cache
+      - seeder
+
+  seeder:
+    <<: *app
+    command: "./docker/prod/seeder"
+    restart: on-failure
+    networks:
+      - backend
+
+  # Service MCP OpenProject
+  mcp-server:
+    image: openproject-mcp-server:latest
+    container_name: openproject-mcp-server
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      # Utiliser le service web OpenProject dans le réseau Docker
+      - OPENPROJECT_URL=http://web:8080
+      - OPENPROJECT_API_KEY=${OPENPROJECT_MCP_API_KEY}
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8080
+      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
+    
+    # Port mapping pour accès externe
+    ports:
+      - "${MCP_EXTERNAL_PORT:-39127}:8080"  # Port MCP principal
+      - "${MCP_STATUS_PORT:-39128}:8081"    # Port de statut
+    
+    # Volume mounts pour persistance
+    volumes:
+      - mcp_logs:/app/logs
+      - mcp_data:/app/data
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import asyncio; import sys; sys.path.insert(0, '/app/src'); from openproject_client import OpenProjectClient; async def check(): client = OpenProjectClient(); result = await client.test_connection(); await client.close(); exit(0 if result['success'] else 1); asyncio.run(check())"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Réseau partagé avec OpenProject
+    networks:
+      - backend
+    
+    # Dépendance sur le service web OpenProject
+    depends_on:
+      - web
+    
+    # Labels pour Portainer et Traefik
+    labels:
+      - "traefik.enable=false"  # Pas d'exposition via Traefik pour le moment
+      - "portainer.agent.role=application"
+      - autoheal=true
