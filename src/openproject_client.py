@@ -74,6 +74,7 @@ class OpenProjectClient:
         # HTTP client configuration
         self.client = httpx.AsyncClient(
             timeout=30.0,
+            verify=False,  # Désactiver la vérification SSL pour les certificats auto-signés
             headers={
                 "Authorization": f"Basic {auth_string}",
                 "Content-Type": "application/json",

@@ -1,0 +1,27 @@
+# Traefik v2 static configuration (Let's Encrypt via HTTP challenge)
+
+api:
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    network: traefik_network
+    exposedByDefault: false
+
+certificatesResolvers:
+  le-prod:
+    acme:
+      email: you@example.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+accessLog: {}
+log:
+  level: INFO

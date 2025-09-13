@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik_network"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--api.dashboard=true"
+      - "--certificatesresolvers.le-prod.acme.email=you@example.com"
+      - "--certificatesresolvers.le-prod.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.le-prod.acme.httpchallenge=true"
+      - "--certificatesresolvers.le-prod.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard (protect with your own auth/IP rules)
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik.yml:/traefik.yml:ro"
+      - "./letsencrypt:/letsencrypt"
+    networks:
+      - traefik_network
+    restart: unless-stopped
+
+networks:
+  traefik_network:
+    external: true

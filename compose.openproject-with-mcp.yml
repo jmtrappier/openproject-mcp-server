@@ -54,9 +54,9 @@ services:
     <<: *app
     command: "./docker/prod/web"
     networks:
-      - frontend
-      - backend
-      - traefik_network      
+      frontend:
+      backend:
+      traefik_network:      
     depends_on:
       - db
       - cache
@@ -67,7 +67,15 @@ services:
       - "traefik.http.routers.openproject.rule=Host(`${OPENPROJECT_HOST__NAME}`)"
       - "traefik.http.routers.openproject.entrypoints=websecure"
       - "traefik.http.routers.openproject.tls=true"
+      - "traefik.http.routers.openproject.tls.certresolver=le-prod"
+      # HTTP -> HTTPS redirect
+      - "traefik.http.routers.openproject-http.rule=Host(`${OPENPROJECT_HOST__NAME}`)"
+      - "traefik.http.routers.openproject-http.entrypoints=web"
+      - "traefik.http.routers.openproject-http.middlewares=openproject-redirect@docker"
+      - "traefik.http.middlewares.openproject-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.openproject-redirect.redirectscheme.permanent=true"
       - "traefik.http.services.openproject.loadbalancer.server.port=8080"      
+      # Forwarded headers: rely on Traefik defaults for HTTPS
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080${OPENPROJECT_RAILS__RELATIVE__URL__ROOT:-}/health_checks/default"]
       interval: 10s
@@ -119,17 +127,17 @@ services:
     
     # Environment configuration
     environment:
-      # Utiliser le service web OpenProject dans le réseau Docker
-      - OPENPROJECT_URL=http://web:8080
+      # Utiliser le FQDN public via Traefik (HTTPS) pour éviter 400 Host mismatch
+      - OPENPROJECT_URL=https://${OPENPROJECT_HOST__NAME}${OPENPROJECT_RAILS__RELATIVE__URL__ROOT:-}
       - OPENPROJECT_API_KEY=${OPENPROJECT_MCP_API_KEY}
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8080
       - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
+      - PYTHONHTTPSVERIFY=0
+      - CURL_CA_BUNDLE=""
+      - REQUESTS_CA_BUNDLE=""
     
-    # Port mapping pour accès externe
-    ports:
-      - "${MCP_EXTERNAL_PORT:-39127}:8080"  # Port MCP principal
-      - "${MCP_STATUS_PORT:-39128}:8081"    # Port de statut
+    # Exposition via Traefik (pas via ports directs)
     
     # Volume mounts pour persistance
     volumes:
@@ -146,9 +154,9 @@ services:
           memory: 256M
           cpus: '0.25'
     
-    # Health check
+    # Health check (vérifie le statut HTTP interne)
     healthcheck:
-      test: ["CMD", "python3", "-c", "import asyncio; import sys; sys.path.insert(0, '/app/src'); from openproject_client import OpenProjectClient; async def check(): client = OpenProjectClient(); result = await client.test_connection(); await client.close(); exit(0 if result['success'] else 1); asyncio.run(check())"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -157,6 +165,7 @@ services:
     # Réseau partagé avec OpenProject
     networks:
       - backend
+      - traefik_network
     
     # Dépendance sur le service web OpenProject
     depends_on:
@@ -164,6 +173,11 @@ services:
     
     # Labels pour Portainer et Traefik
     labels:
-      - "traefik.enable=false"  # Pas d'exposition via Traefik pour le moment
-      - "portainer.agent.role=application"
       - autoheal=true
+      - "portainer.agent.role=application"
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp.rule=Host(`${MCP_TRAEFIK_HOST}`)"
+      - "traefik.http.routers.mcp.entrypoints=websecure"
+      - "traefik.http.routers.mcp.tls=true"
+      - "traefik.http.routers.mcp.tls.certresolver=le-prod"
+      - "traefik.http.services.mcp.loadbalancer.server.port=8080"

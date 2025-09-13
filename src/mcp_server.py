@@ -127,7 +127,8 @@ async def create_work_package(
     due_date: Optional[str] = None,
     parent_id: Optional[int] = None,
     assignee_id: Optional[int] = None,
-    estimated_hours: Optional[float] = None
+    estimated_hours: Optional[float] = None,
+    type_id: Optional[int] = None
 ) -> str:
     """Create a work package in a project with dates for Gantt chart.
     
@@ -140,6 +141,7 @@ async def create_work_package(
         parent_id: Parent work package ID for hierarchy (optional)
         assignee_id: User ID to assign work package to (optional)
         estimated_hours: Estimated hours for completion (optional)
+        type_id: Work package type ID (1=Task, 5=Epic, 6=User story, 4=Feature, 7=Bug, 2=Milestone, 3=Summary task) (optional)
     
     Returns:
         JSON string with work package creation result
@@ -180,7 +182,8 @@ async def create_work_package(
             due_date=due_date,
             parent_id=parent_id,
             assignee_id=assignee_id,
-            estimated_hours=estimated_hours
+            estimated_hours=estimated_hours,
+            type_id=type_id
         )
         
         # Call OpenProject API
